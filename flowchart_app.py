@@ -21,7 +21,11 @@ def add_instructions():
        - Modify connections
        - Update labels
     
-    4. **Save Your Work**
+    4. **Improve Your Flowchart**
+       - Click "Improve Flowchart" for AI suggestions
+       - Add more detail and decision points
+    
+    5. **Save Your Work**
        - Download as PDF
        - Export as JSON
     """)
@@ -40,6 +44,44 @@ def load_default_edges():
         ('B', 'C', 'Evaluate'),
         ('C', 'D', 'Complete')
     ]
+
+def improve_flowchart(nodes, edges):
+    genai.configure(api_key=st.session_state.api_key)
+    model = genai.GenerativeModel('gemini-pro')
+    
+    improvement_prompt = f"""Analyze and enhance this flowchart:
+    Current Nodes: {nodes}
+    Current Edges: {edges}
+
+    Provide improvements by:
+    1. Adding more detailed decision points
+    2. Including parallel processes
+    3. Adding error handling paths
+    4. Expanding key steps
+    5. Adding validation checkpoints
+
+    Output only valid JSON with this structure:
+    {{
+        "nodes": {{"id": "label"}},
+        "edges": [["source_id", "target_id", "label"]]
+    }}
+
+    Keep existing nodes and add new ones with next available IDs."""
+    
+    response = model.generate_content(improvement_prompt)
+    
+    try:
+        response_text = response.text.strip()
+        if response_text.startswith('```'):
+            response_text = response_text.split('```')[1]
+        if response_text.startswith('json'):
+            response_text = response_text[4:]
+            
+        improved_data = json.loads(response_text.strip())
+        return improved_data['nodes'], improved_data['edges']
+    except Exception as e:
+        st.write("Improvement response:", response.text)
+        return nodes, edges
 
 def generate_flowchart_from_prompt(prompt):
     genai.configure(api_key=st.session_state.api_key)
@@ -198,11 +240,23 @@ def main():
             height=100
         )
         
-        if st.button("🎨 Generate Flowchart"):
-            with st.spinner("Generating..."):
-                nodes, edges = generate_flowchart_from_prompt(user_prompt)
-                st.session_state.nodes = nodes
-                st.session_state.edges = edges
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🎨 Generate Flowchart"):
+                with st.spinner("Generating..."):
+                    nodes, edges = generate_flowchart_from_prompt(user_prompt)
+                    st.session_state.nodes = nodes
+                    st.session_state.edges = edges
+        with col2:
+            if hasattr(st.session_state, 'nodes'):
+                if st.button("✨ Improve Flowchart"):
+                    with st.spinner("Enhancing flowchart..."):
+                        improved_nodes, improved_edges = improve_flowchart(
+                            st.session_state.nodes,
+                            st.session_state.edges
+                        )
+                        st.session_state.nodes = improved_nodes
+                        st.session_state.edges = improved_edges
 
         if hasattr(st.session_state, 'nodes'):
             st.divider()
