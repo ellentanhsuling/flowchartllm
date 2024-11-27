@@ -4,7 +4,7 @@ import json
 import google.generativeai as genai
 
 def add_instructions():
-    st.sidebar.markdown("""
+    st.markdown("""
     ### 🎯 Quick Start Guide
     
     1. **Get Your API Key**
@@ -17,18 +17,13 @@ def add_instructions():
        - Click "Generate Flowchart" button
     
     3. **Edit Your Flowchart**
-       - Modify node text directly
-       - Adjust connections using dropdowns
-       - Add labels to connections
+       - Add/Remove nodes
+       - Modify connections
+       - Update labels
     
     4. **Save Your Work**
-       - Use "Export Flowchart" to download PDF
-       - Download JSON for future editing
-    
-    ### 💡 Tips
-    - Be specific in your flowchart description
-    - Include decision points and outcomes
-    - Use clear, concise node labels
+       - Download as PDF
+       - Export as JSON
     """)
 
 def load_default_nodes():
@@ -101,8 +96,6 @@ def generate_flowchart_from_prompt(prompt):
             response_text = response_text[4:]
             
         flowchart_data = json.loads(response_text.strip())
-        st.session_state.nodes = flowchart_data['nodes']
-        st.session_state.edges = flowchart_data['edges']
         return flowchart_data['nodes'], flowchart_data['edges']
     except Exception as e:
         st.write("Generated response:", response.text)
@@ -111,6 +104,9 @@ def generate_flowchart_from_prompt(prompt):
 def create_flowchart(nodes, edges):
     dot = graphviz.Digraph()
     dot.attr(rankdir='TB')
+    
+    # Set default node attributes for rectangular boxes
+    dot.attr('node', shape='box', style='filled', fillcolor='lightgray')
     
     for node_id, label in nodes.items():
         dot.node(node_id, f"{node_id}: {label}")
@@ -122,118 +118,130 @@ def create_flowchart(nodes, edges):
 
 def edit_nodes_and_edges(nodes, edges):
     st.markdown("### ✏️ Edit Nodes")
-    st.info("Modify the text for each node below")
+    
+    # Add new node
+    st.markdown("#### Add New Node")
+    col1, col2 = st.columns(2)
+    with col1:
+        new_node_id = st.text_input("New Node ID (e.g., J, K, L...)", "")
+    with col2:
+        new_node_label = st.text_input("New Node Label", "")
+    if st.button("➕ Add Node") and new_node_id and new_node_label:
+        nodes[new_node_id] = new_node_label
+
+    # Edit existing nodes
+    st.markdown("#### Edit/Remove Nodes")
     updated_nodes = {}
     for node_id, label in nodes.items():
-        st.markdown(f"**Node ID: {node_id}** (Current Label: {label})")
-        new_label = st.text_input(f"Update Label for Node {node_id}", label, key=f"node_{node_id}")
-        updated_nodes[node_id] = new_label
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_label = st.text_input(f"Node {node_id}", label, key=f"node_{node_id}")
+        with col2:
+            keep_node = not st.button(f"🗑️ Remove", key=f"remove_node_{node_id}")
+        if keep_node:
+            updated_nodes[node_id] = new_label
 
     st.markdown("### 🔗 Edit Connections")
-    st.info("Adjust the connections between nodes and their labels")
+    
+    # Add new edge
+    st.markdown("#### Add New Connection")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        new_source = st.selectbox("From", options=list(updated_nodes.keys()), key="new_edge_source")
+    with col2:
+        new_target = st.selectbox("To", options=list(updated_nodes.keys()), key="new_edge_target")
+    with col3:
+        new_edge_label = st.text_input("Label", "")
+    if st.button("➕ Add Connection"):
+        edges.append((new_source, new_target, new_edge_label))
+
+    # Edit existing edges
+    st.markdown("#### Edit/Remove Connections")
     updated_edges = []
     for i, (source, target, label) in enumerate(edges):
-        st.markdown(f"**Edge {i+1}**: From {source} ({nodes[source]}) → To {target} ({nodes[target]})")
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns([2, 2, 3, 1])
         with col1:
-            new_source = st.selectbox(f"From Node {i}", options=list(nodes.keys()), key=f"source_{i}", index=list(nodes.keys()).index(source))
+            new_source = st.selectbox(f"From", options=list(updated_nodes.keys()), key=f"source_{i}", index=list(updated_nodes.keys()).index(source))
         with col2:
-            new_target = st.selectbox(f"To Node {i}", options=list(nodes.keys()), key=f"target_{i}", index=list(nodes.keys()).index(target))
+            new_target = st.selectbox(f"To", options=list(updated_nodes.keys()), key=f"target_{i}", index=list(updated_nodes.keys()).index(target))
         with col3:
-            new_label = st.text_input(f"Connection Label {i}", label, key=f"label_{i}")
-        updated_edges.append((new_source, new_target, new_label))
+            new_label = st.text_input(f"Label", label, key=f"label_{i}")
+        with col4:
+            keep_edge = not st.button(f"🗑️", key=f"remove_edge_{i}")
+        if keep_edge:
+            updated_edges.append((new_source, new_target, new_label))
 
     return updated_nodes, updated_edges
 
 def main():
-    st.title('🔄 AI-Powered Flowchart Generator')
+    st.set_page_config(layout="wide")
     
-    add_instructions()
+    left_col, right_col = st.columns([2, 3])
     
-    if 'nodes' not in st.session_state:
-        st.session_state.nodes = load_default_nodes()
-    if 'edges' not in st.session_state:
-        st.session_state.edges = load_default_edges()
-    if 'api_key' not in st.session_state:
-        st.session_state.api_key = ''
-
-    api_key = st.sidebar.text_input(
-        "🔑 Enter Google Gemini API Key",
-        type="password",
-        value=st.session_state.api_key,
-        help="Get your API key from https://makersuite.google.com/app/apikey"
-    )
-    st.session_state.api_key = api_key
-
-    if not api_key:
-        st.warning("⚠️ Please enter your Google Gemini API key in the sidebar to start generating flowcharts")
-        return
-
-    st.markdown("### 📝 Describe Your Flowchart")
-    user_prompt = st.text_area(
-        "Be specific about the process or workflow you want to create:",
-        "Create a detailed flowchart for handling emergency situations in a school, including assessment, response procedures, and follow-up actions.",
-        height=100
-    )
-    
-    if st.button("🎨 Generate Flowchart"):
-        with st.spinner("🔄 Generating detailed flowchart..."):
-            nodes, edges = generate_flowchart_from_prompt(user_prompt)
-            st.session_state.nodes = nodes
-            st.session_state.edges = edges
-            
-            st.markdown("### 📊 Generated Flowchart")
-            dot = create_flowchart(nodes, edges)
-            st.graphviz_chart(dot)
-            
-            dot.render("flowchart", format="pdf", cleanup=True)
-            with open("flowchart.pdf", "rb") as pdf_file:
-                PDFbyte = pdf_file.read()
-                st.download_button(
-                    label="📥 Download PDF",
-                    data=PDFbyte,
-                    file_name="flowchart.pdf",
-                    mime='application/pdf'
-                )
-    
-    if hasattr(st.session_state, 'nodes') and st.session_state.nodes != load_default_nodes():
-        st.divider()
-        st.markdown("### ✏️ Edit Generated Flowchart")
+    with left_col:
+        st.title('🔄 Flowchart Generator')
+        add_instructions()
         
-        updated_nodes, updated_edges = edit_nodes_and_edges(
-            st.session_state.nodes, 
-            st.session_state.edges
+        api_key = st.text_input(
+            "🔑 Enter Google Gemini API Key",
+            type="password",
+            value=st.session_state.get('api_key', ''),
+            help="Get your API key from https://makersuite.google.com/app/apikey"
+        )
+        st.session_state.api_key = api_key
+
+        if not api_key:
+            st.warning("⚠️ Please enter your API key to start")
+            return
+
+        user_prompt = st.text_area(
+            "📝 Describe Your Flowchart",
+            "Create a detailed flowchart for handling emergency situations",
+            height=100
         )
         
-        st.session_state.nodes = updated_nodes
-        st.session_state.edges = updated_edges
-        
-        st.markdown("### 📊 Updated Flowchart")
-        dot = create_flowchart(updated_nodes, updated_edges)
-        st.graphviz_chart(dot)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            dot.render("flowchart_updated", format="pdf", cleanup=True)
-            with open("flowchart_updated.pdf", "rb") as pdf_file:
-                PDFbyte = pdf_file.read()
-                st.download_button(
-                    label="📥 Download Updated PDF",
-                    data=PDFbyte,
-                    file_name="flowchart_updated.pdf",
-                    mime='application/pdf'
-                )
-        with col2:
-            export_data = {
-                "nodes": updated_nodes,
-                "edges": updated_edges
-            }
-            st.download_button(
-                "💾 Download JSON",
-                data=json.dumps(export_data, indent=2),
-                file_name="flowchart_data.json",
-                mime="application/json"
+        if st.button("🎨 Generate Flowchart"):
+            with st.spinner("Generating..."):
+                nodes, edges = generate_flowchart_from_prompt(user_prompt)
+                st.session_state.nodes = nodes
+                st.session_state.edges = edges
+
+        if hasattr(st.session_state, 'nodes'):
+            st.divider()
+            updated_nodes, updated_edges = edit_nodes_and_edges(
+                st.session_state.nodes, 
+                st.session_state.edges
             )
+            st.session_state.nodes = updated_nodes
+            st.session_state.edges = updated_edges
+
+    with right_col:
+        if hasattr(st.session_state, 'nodes'):
+            st.markdown("### 📊 Current Flowchart")
+            dot = create_flowchart(st.session_state.nodes, st.session_state.edges)
+            st.graphviz_chart(dot)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                dot.render("flowchart", format="pdf", cleanup=True)
+                with open("flowchart.pdf", "rb") as pdf_file:
+                    st.download_button(
+                        "📥 Download PDF",
+                        data=pdf_file.read(),
+                        file_name="flowchart.pdf",
+                        mime='application/pdf'
+                    )
+            with col2:
+                export_data = {
+                    "nodes": st.session_state.nodes,
+                    "edges": st.session_state.edges
+                }
+                st.download_button(
+                    "💾 Download JSON",
+                    data=json.dumps(export_data, indent=2),
+                    file_name="flowchart_data.json",
+                    mime="application/json"
+                )
 
 if __name__ == "__main__":
     main()
