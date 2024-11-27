@@ -22,13 +22,12 @@ def add_instructions():
        - Add labels to connections
     
     4. **Save Your Work**
-       - Use "Export Flowchart" to download
-       - Saves as JSON for future editing
+       - Use "Export Flowchart" to download PDF
+       - Download JSON for future editing
     
     ### 💡 Tips
     - Be specific in your flowchart description
     - Include decision points and outcomes
-    - Preview updates in real-time
     - Use clear, concise node labels
     """)
 
@@ -98,7 +97,7 @@ def create_flowchart(nodes, edges):
     dot.attr(rankdir='TB')
     
     for node_id, label in nodes.items():
-        dot.node(node_id, label)
+        dot.node(node_id, f"{node_id}: {label}")
     
     for source, target, label in edges:
         dot.edge(source, target, label)
@@ -110,13 +109,15 @@ def edit_nodes_and_edges(nodes, edges):
     st.info("Modify the text for each node below")
     updated_nodes = {}
     for node_id, label in nodes.items():
-        new_label = st.text_input(f"Node {node_id}", label)
+        st.markdown(f"**Node ID: {node_id}** (Current Label: {label})")
+        new_label = st.text_input(f"Update Label for Node {node_id}", label)
         updated_nodes[node_id] = new_label
 
     st.markdown("### 🔗 Edit Connections")
     st.info("Adjust the connections between nodes and their labels")
     updated_edges = []
     for i, (source, target, label) in enumerate(edges):
+        st.markdown(f"**Edge {i+1}**: From {source} ({nodes[source]}) → To {target} ({nodes[target]})")
         col1, col2, col3 = st.columns(3)
         with col1:
             new_source = st.selectbox(f"From Node {i}", options=list(nodes.keys()), key=f"source_{i}", index=list(nodes.keys()).index(source))
@@ -129,7 +130,7 @@ def edit_nodes_and_edges(nodes, edges):
     return updated_nodes, updated_edges
 
 def main():
-    st.title('🔄 AI-Powered Flowchart Generator with Editor')
+    st.title('🔄 AI-Powered Flowchart Generator')
     
     add_instructions()
     
@@ -163,32 +164,61 @@ def main():
     
     if st.button("🎨 Generate Flowchart"):
         with st.spinner("🔄 Generating flowchart..."):
-            st.session_state.nodes, st.session_state.edges = generate_flowchart_from_prompt(user_prompt)
+            nodes, edges = generate_flowchart_from_prompt(user_prompt)
+            st.session_state.nodes = nodes
+            st.session_state.edges = edges
+            
+            st.markdown("### 📊 Generated Flowchart")
+            dot = create_flowchart(nodes, edges)
+            st.graphviz_chart(dot)
+            
+            # Save flowchart as PDF
+            dot.render("flowchart", format="pdf", cleanup=True)
+            with open("flowchart.pdf", "rb") as pdf_file:
+                PDFbyte = pdf_file.read()
+                st.download_button(
+                    label="📥 Download PDF",
+                    data=PDFbyte,
+                    file_name="flowchart.pdf",
+                    mime='application/pdf'
+                )
     
-    st.divider()
-    
-    # Edit mode
-    st.session_state.nodes, st.session_state.edges = edit_nodes_and_edges(
-        st.session_state.nodes, 
-        st.session_state.edges
-    )
-    
-    st.markdown("### 👀 Preview")
-    dot = create_flowchart(st.session_state.nodes, st.session_state.edges)
-    st.graphviz_chart(dot)
-    
-    # Export functionality
-    if st.button("💾 Export Flowchart"):
-        export_data = {
-            "nodes": st.session_state.nodes,
-            "edges": st.session_state.edges
-        }
-        st.download_button(
-            "📥 Download JSON",
-            data=json.dumps(export_data, indent=2),
-            file_name="flowchart_data.json",
-            mime="application/json"
+    if st.session_state.nodes != load_default_nodes():
+        st.divider()
+        st.markdown("### ✏️ Edit Generated Flowchart")
+        st.session_state.nodes, st.session_state.edges = edit_nodes_and_edges(
+            st.session_state.nodes, 
+            st.session_state.edges
         )
+        
+        st.markdown("### 📊 Updated Flowchart")
+        dot = create_flowchart(st.session_state.nodes, st.session_state.edges)
+        st.graphviz_chart(dot)
+        
+        # Export functionality
+        col1, col2 = st.columns(2)
+        with col1:
+            # Save updated flowchart as PDF
+            dot.render("flowchart_updated", format="pdf", cleanup=True)
+            with open("flowchart_updated.pdf", "rb") as pdf_file:
+                PDFbyte = pdf_file.read()
+                st.download_button(
+                    label="📥 Download Updated PDF",
+                    data=PDFbyte,
+                    file_name="flowchart_updated.pdf",
+                    mime='application/pdf'
+                )
+        with col2:
+            export_data = {
+                "nodes": st.session_state.nodes,
+                "edges": st.session_state.edges
+            }
+            st.download_button(
+                "💾 Download JSON",
+                data=json.dumps(export_data, indent=2),
+                file_name="flowchart_data.json",
+                mime="application/json"
+            )
 
 if __name__ == "__main__":
     main()
