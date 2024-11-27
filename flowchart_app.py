@@ -27,6 +27,7 @@ def add_instructions():
     
     ### 💡 Tips
     - Be specific in your flowchart description
+    - Include decision points and outcomes
     - Preview updates in real-time
     - Use clear, concise node labels
     """)
@@ -50,14 +51,41 @@ def generate_flowchart_from_prompt(prompt):
     genai.configure(api_key=st.session_state.api_key)
     model = genai.GenerativeModel('gemini-pro')
     
-    response = model.generate_content(
-        f"""Create a flowchart structure for: {prompt}
-        Output only valid JSON with this structure:
-        {{
-            "nodes": {{"id": "label"}},
-            "edges": [["source_id", "target_id", "label"]]
-        }}""",
-    )
+    enhanced_prompt = f"""Create a detailed flowchart structure for: {prompt}
+    The flowchart should capture all decision points and processes mentioned.
+    Output a valid JSON with this structure:
+    {{
+        "nodes": {{"id": "label"}},
+        "edges": [["source_id", "target_id", "label"]]
+    }}
+    
+    For the nodes:
+    - Include all decision points with clear yes/no outcomes
+    - Break down major processes into steps
+    - Use descriptive labels
+    - Ensure logical flow between steps
+    
+    For the edges:
+    - Label decision paths clearly (e.g., "Yes", "No")
+    - Include action descriptions where relevant
+    
+    Example node structure:
+    {{
+        "A": "Initial Assessment",
+        "B": "Evaluate Threat Level",
+        "C": "De-escalation Process",
+        "D": "Emergency Response"
+    }}
+    
+    Example edge structure:
+    [
+        ["A", "B", "Proceed to evaluation"],
+        ["B", "C", "Low threat"],
+        ["B", "D", "High threat"]
+    ]
+    """
+    
+    response = model.generate_content(enhanced_prompt)
     
     try:
         flowchart_data = json.loads(response.text)
@@ -130,7 +158,7 @@ def main():
     user_prompt = st.text_area(
         "Be specific about the process or workflow you want to create:",
         "Create a flowchart for project planning",
-        help="Example: Create a flowchart for customer onboarding process"
+        help="Example: Create a detailed flowchart for handling customer complaints, including initial assessment, escalation criteria, and resolution steps"
     )
     
     if st.button("🎨 Generate Flowchart"):
