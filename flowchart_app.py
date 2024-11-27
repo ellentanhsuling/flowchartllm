@@ -104,8 +104,6 @@ def generate_flowchart_from_prompt(prompt):
 def create_flowchart(nodes, edges):
     dot = graphviz.Digraph()
     dot.attr(rankdir='TB')
-    
-    # Set default node attributes for rectangular boxes
     dot.attr('node', shape='box', style='filled', fillcolor='lightgray')
     
     for node_id, label in nodes.items():
@@ -176,44 +174,64 @@ def edit_nodes_and_edges(nodes, edges):
 def main():
     st.set_page_config(layout="wide")
     
+    # Custom CSS for scrollable left panel
+    st.markdown("""
+        <style>
+            section[data-testid="stSidebar"] {
+                width: 40% !important;
+                height: 100vh;
+                overflow-y: auto;
+            }
+            .stContainer {
+                height: 100vh;
+                overflow-y: auto;
+            }
+            div[data-testid="stVerticalBlock"] > div:has(div.stMarkdown) {
+                height: 100vh;
+                overflow-y: auto;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
     left_col, right_col = st.columns([2, 3])
     
     with left_col:
-        st.title('🔄 Flowchart Generator')
-        add_instructions()
-        
-        api_key = st.text_input(
-            "🔑 Enter Google Gemini API Key",
-            type="password",
-            value=st.session_state.get('api_key', ''),
-            help="Get your API key from https://makersuite.google.com/app/apikey"
-        )
-        st.session_state.api_key = api_key
-
-        if not api_key:
-            st.warning("⚠️ Please enter your API key to start")
-            return
-
-        user_prompt = st.text_area(
-            "📝 Describe Your Flowchart",
-            "Create a detailed flowchart for handling emergency situations",
-            height=100
-        )
-        
-        if st.button("🎨 Generate Flowchart"):
-            with st.spinner("Generating..."):
-                nodes, edges = generate_flowchart_from_prompt(user_prompt)
-                st.session_state.nodes = nodes
-                st.session_state.edges = edges
-
-        if hasattr(st.session_state, 'nodes'):
-            st.divider()
-            updated_nodes, updated_edges = edit_nodes_and_edges(
-                st.session_state.nodes, 
-                st.session_state.edges
+        with st.container():
+            st.title('🔄 Flowchart Generator')
+            add_instructions()
+            
+            api_key = st.text_input(
+                "🔑 Enter Google Gemini API Key",
+                type="password",
+                value=st.session_state.get('api_key', ''),
+                help="Get your API key from https://makersuite.google.com/app/apikey"
             )
-            st.session_state.nodes = updated_nodes
-            st.session_state.edges = updated_edges
+            st.session_state.api_key = api_key
+
+            if not api_key:
+                st.warning("⚠️ Please enter your API key to start")
+                return
+
+            user_prompt = st.text_area(
+                "📝 Describe Your Flowchart",
+                "Create a detailed flowchart for handling emergency situations",
+                height=100
+            )
+            
+            if st.button("🎨 Generate Flowchart"):
+                with st.spinner("Generating..."):
+                    nodes, edges = generate_flowchart_from_prompt(user_prompt)
+                    st.session_state.nodes = nodes
+                    st.session_state.edges = edges
+
+            if hasattr(st.session_state, 'nodes'):
+                st.divider()
+                updated_nodes, updated_edges = edit_nodes_and_edges(
+                    st.session_state.nodes, 
+                    st.session_state.edges
+                )
+                st.session_state.nodes = updated_nodes
+                st.session_state.edges = updated_edges
 
     with right_col:
         if hasattr(st.session_state, 'nodes'):
