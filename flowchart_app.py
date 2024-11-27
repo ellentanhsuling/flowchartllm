@@ -34,62 +34,80 @@ def add_instructions():
 def load_default_nodes():
     return {
         'A': 'Start',
-        'B': 'Process',
-        'C': 'Decision',
+        'B': 'Initial Assessment',
+        'C': 'Decision Point',
         'D': 'End'
     }
 
 def load_default_edges():
     return [
-        ('A', 'B', ''),
-        ('B', 'C', ''),
-        ('C', 'D', '')
+        ('A', 'B', 'Begin Process'),
+        ('B', 'C', 'Evaluate'),
+        ('C', 'D', 'Complete')
     ]
 
 def generate_flowchart_from_prompt(prompt):
     genai.configure(api_key=st.session_state.api_key)
     model = genai.GenerativeModel('gemini-pro')
     
-    enhanced_prompt = f"""Create a detailed flowchart structure for: {prompt}
-    The flowchart should capture all decision points and processes mentioned.
-    Output a valid JSON with this structure:
+    enhanced_prompt = f"""Generate a comprehensive flowchart for: {prompt}
+
+    Requirements:
+    1. Minimum 8-10 detailed steps/nodes
+    2. Multiple decision points with Yes/No branches
+    3. Clear process flows with specific actions
+    4. Descriptive edge labels for each connection
+    5. Logical sequence from start to end
+
+    Output format must be valid JSON with this structure:
     {{
         "nodes": {{"id": "label"}},
         "edges": [["source_id", "target_id", "label"]]
     }}
-    
-    For the nodes:
-    - Include all decision points with clear yes/no outcomes
-    - Break down major processes into steps
-    - Use descriptive labels
-    - Ensure logical flow between steps
-    
-    For the edges:
-    - Label decision paths clearly (e.g., "Yes", "No")
-    - Include action descriptions where relevant
-    
-    Example node structure:
+
+    Include specific details for:
+    - Initial assessment steps
+    - Decision criteria
+    - Alternative paths
+    - Final outcomes
+    - Follow-up actions
+
+    Example output structure:
     {{
-        "A": "Initial Assessment",
-        "B": "Evaluate Threat Level",
-        "C": "De-escalation Process",
-        "D": "Emergency Response"
+        "nodes": {{
+            "A": "Start Process",
+            "B": "Initial Assessment",
+            "C": "Evaluate Severity",
+            "D": "High Risk Path",
+            "E": "Low Risk Path",
+            "F": "Implement Actions",
+            "G": "Monitor Results",
+            "H": "Final Review",
+            "I": "End Process"
+        }},
+        "edges": [
+            ["A", "B", "Begin evaluation"],
+            ["B", "C", "Assessment complete"],
+            ["C", "D", "High risk identified"],
+            ["C", "E", "Low risk identified"],
+            ["D", "F", "Take immediate action"],
+            ["E", "F", "Proceed with standard protocol"],
+            ["F", "G", "Actions implemented"],
+            ["G", "H", "Monitor outcomes"],
+            ["H", "I", "Process complete"]
+        ]
     }}
-    
-    Example edge structure:
-    [
-        ["A", "B", "Proceed to evaluation"],
-        ["B", "C", "Low threat"],
-        ["B", "D", "High threat"]
-    ]
     """
     
     response = model.generate_content(enhanced_prompt)
     
     try:
         flowchart_data = json.loads(response.text)
+        st.session_state.nodes = flowchart_data['nodes']
+        st.session_state.edges = flowchart_data['edges']
         return flowchart_data['nodes'], flowchart_data['edges']
-    except:
+    except Exception as e:
+        st.error(f"Error generating flowchart: {str(e)}")
         return load_default_nodes(), load_default_edges()
 
 def create_flowchart(nodes, edges):
@@ -110,7 +128,7 @@ def edit_nodes_and_edges(nodes, edges):
     updated_nodes = {}
     for node_id, label in nodes.items():
         st.markdown(f"**Node ID: {node_id}** (Current Label: {label})")
-        new_label = st.text_input(f"Update Label for Node {node_id}", label)
+        new_label = st.text_input(f"Update Label for Node {node_id}", label, key=f"node_{node_id}")
         updated_nodes[node_id] = new_label
 
     st.markdown("### 🔗 Edit Connections")
@@ -134,7 +152,6 @@ def main():
     
     add_instructions()
     
-    # Initialize session state
     if 'nodes' not in st.session_state:
         st.session_state.nodes = load_default_nodes()
     if 'edges' not in st.session_state:
@@ -142,7 +159,6 @@ def main():
     if 'api_key' not in st.session_state:
         st.session_state.api_key = ''
 
-    # API Key input in sidebar
     api_key = st.sidebar.text_input(
         "🔑 Enter Google Gemini API Key",
         type="password",
@@ -158,12 +174,12 @@ def main():
     st.markdown("### 📝 Describe Your Flowchart")
     user_prompt = st.text_area(
         "Be specific about the process or workflow you want to create:",
-        "Create a flowchart for project planning",
-        help="Example: Create a detailed flowchart for handling customer complaints, including initial assessment, escalation criteria, and resolution steps"
+        "Create a detailed flowchart for handling emergency situations in a school, including assessment, response procedures, and follow-up actions.",
+        height=100
     )
     
     if st.button("🎨 Generate Flowchart"):
-        with st.spinner("🔄 Generating flowchart..."):
+        with st.spinner("🔄 Generating detailed flowchart..."):
             nodes, edges = generate_flowchart_from_prompt(user_prompt)
             st.session_state.nodes = nodes
             st.session_state.edges = edges
@@ -172,7 +188,6 @@ def main():
             dot = create_flowchart(nodes, edges)
             st.graphviz_chart(dot)
             
-            # Save flowchart as PDF
             dot.render("flowchart", format="pdf", cleanup=True)
             with open("flowchart.pdf", "rb") as pdf_file:
                 PDFbyte = pdf_file.read()
@@ -183,22 +198,24 @@ def main():
                     mime='application/pdf'
                 )
     
-    if st.session_state.nodes != load_default_nodes():
+    if hasattr(st.session_state, 'nodes') and st.session_state.nodes != load_default_nodes():
         st.divider()
         st.markdown("### ✏️ Edit Generated Flowchart")
-        st.session_state.nodes, st.session_state.edges = edit_nodes_and_edges(
+        
+        updated_nodes, updated_edges = edit_nodes_and_edges(
             st.session_state.nodes, 
             st.session_state.edges
         )
         
+        st.session_state.nodes = updated_nodes
+        st.session_state.edges = updated_edges
+        
         st.markdown("### 📊 Updated Flowchart")
-        dot = create_flowchart(st.session_state.nodes, st.session_state.edges)
+        dot = create_flowchart(updated_nodes, updated_edges)
         st.graphviz_chart(dot)
         
-        # Export functionality
         col1, col2 = st.columns(2)
         with col1:
-            # Save updated flowchart as PDF
             dot.render("flowchart_updated", format="pdf", cleanup=True)
             with open("flowchart_updated.pdf", "rb") as pdf_file:
                 PDFbyte = pdf_file.read()
@@ -210,8 +227,8 @@ def main():
                 )
         with col2:
             export_data = {
-                "nodes": st.session_state.nodes,
-                "edges": st.session_state.edges
+                "nodes": updated_nodes,
+                "edges": updated_edges
             }
             st.download_button(
                 "💾 Download JSON",
