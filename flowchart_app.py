@@ -50,29 +50,22 @@ def generate_flowchart_from_prompt(prompt):
     genai.configure(api_key=st.session_state.api_key)
     model = genai.GenerativeModel('gemini-pro')
     
-    enhanced_prompt = f"""Generate a comprehensive flowchart for: {prompt}
+    enhanced_prompt = f"""Generate ONLY a JSON response for this flowchart: {prompt}
 
-    Requirements:
-    1. Minimum 8-10 detailed steps/nodes
-    2. Multiple decision points with Yes/No branches
-    3. Clear process flows with specific actions
-    4. Descriptive edge labels for each connection
-    5. Logical sequence from start to end
-
-    Output format must be valid JSON with this structure:
+    The response must be a valid JSON object with this exact structure:
     {{
         "nodes": {{"id": "label"}},
         "edges": [["source_id", "target_id", "label"]]
     }}
 
-    Include specific details for:
-    - Initial assessment steps
-    - Decision criteria
-    - Alternative paths
-    - Final outcomes
-    - Follow-up actions
+    Requirements:
+    1. Include 8-10 detailed steps/nodes minimum
+    2. Multiple decision points with Yes/No branches
+    3. Clear process flows with specific actions
+    4. Descriptive edge labels for each connection
+    5. Logical sequence from start to end
 
-    Example output structure:
+    Example valid output:
     {{
         "nodes": {{
             "A": "Start Process",
@@ -96,18 +89,23 @@ def generate_flowchart_from_prompt(prompt):
             ["G", "H", "Monitor outcomes"],
             ["H", "I", "Process complete"]
         ]
-    }}
-    """
+    }}"""
     
     response = model.generate_content(enhanced_prompt)
     
     try:
-        flowchart_data = json.loads(response.text)
+        response_text = response.text.strip()
+        if response_text.startswith('```'):
+            response_text = response_text.split('```')[1]
+        if response_text.startswith('json'):
+            response_text = response_text[4:]
+            
+        flowchart_data = json.loads(response_text.strip())
         st.session_state.nodes = flowchart_data['nodes']
         st.session_state.edges = flowchart_data['edges']
         return flowchart_data['nodes'], flowchart_data['edges']
     except Exception as e:
-        st.error(f"Error generating flowchart: {str(e)}")
+        st.write("Generated response:", response.text)
         return load_default_nodes(), load_default_edges()
 
 def create_flowchart(nodes, edges):
